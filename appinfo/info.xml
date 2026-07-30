@@ -18,7 +18,10 @@ calendar is purely a display layer.
 
 **Features**
 
-* Jalali month view of all your existing calendars
+* Jalali month view of everything the Calendar app shows: your calendars,
+  webcal subscriptions, the birthday calendar, and app-generated calendars
+  such as Deck boards
+* Tasks are shown on their due date, with completed ones struck through
 * Correct Persian month/weekday names, Saturday-first week, Persian numerals
 * Per-calendar colours and show/hide toggles
 * Recurring events expanded within the visible window
@@ -41,21 +44,30 @@ picker is planned for the next version.
 این نسخه فقط خواندنی است. ساخت و ویرایش رویداد با تقویم‌گزین شمسی در نسخهٔ بعد
 افزوده می‌شود.
 	]]></description>
-	<version>0.1.0</version>
+	<version>0.4.0</version>
 	<licence>agpl</licence>
 	<author mail="alijahanbaniardakani@gmail.com">Naser Fathi</author>
 	<namespace>JalaliCalendar</namespace>
 	<category>organization</category>
 	<category>office</category>
-	<website>https://github.com/naserfathi/jalali_calendar</website>
-	<bugs>https://github.com/naserfathi/jalali_calendar/issues</bugs>
-	<repository type="git">https://github.com/naserfathi/jalali_calendar.git</repository>
-	<screenshot>https://raw.githubusercontent.com/naserfathi/jalali_calendar/main/screenshots/month-view.png</screenshot>
+	<website>https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi</website>
+	<bugs>https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/issues</bugs>
+	<repository type="git">https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi.git</repository>
+	<screenshot>https://raw.githubusercontent.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/main/screenshots/month-view.png</screenshot>
 	<dependencies>
 		<php min-version="8.1" max-version="8.4"/>
-		<!-- The UI is built on @nextcloud/vue 9, which requires Nextcloud 31+. -->
-		<nextcloud min-version="31" max-version="32"/>
+		<!-- @nextcloud/vue 9 targets Nextcloud 31+, but the app bundles its own
+		     Vue 3 runtime and relies only on layout components and the
+		     long-standing colour CSS variables, so it also runs on 30.
+		     Verified against 30.0.17. -->
+		<nextcloud min-version="30" max-version="32"/>
 	</dependencies>
+	<settings>
+		<admin>OCA\JalaliCalendar\Settings\AdminSettings</admin>
+		<admin-section>OCA\JalaliCalendar\Settings\AdminSection</admin-section>
+		<personal>OCA\JalaliCalendar\Settings\PersonalSettings</personal>
+		<personal-section>OCA\JalaliCalendar\Settings\AdminSection</personal-section>
+	</settings>
 	<navigations>
 		<navigation>
 			<id>jalali_calendar</id>

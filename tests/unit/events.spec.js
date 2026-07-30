@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { compareEvents, dayKeysForEvent, extractEvents, groupEventsByDay } from '../../src/utils/events.js'
+import { compareEvents, dayKeysForEvent, extractObjects, groupEventsByDay } from '../../src/utils/events.js'
 import { buildMonthGrid } from '../../src/utils/jalali.js'
 
 const CALENDAR = {
@@ -34,19 +34,20 @@ function ics(body) {
  * @param {Date} rangeEnd window end
  * @return {object[]}
  */
-function parse(data, rangeStart, rangeEnd) {
-	return extractEvents(data, {
+function parse(data, rangeStart, rangeEnd, componentType = 'VEVENT') {
+	return extractObjects(data, {
 		rangeStart,
 		rangeEnd,
 		calendar: CALENDAR,
 		objectUrl: '/calendars/naser/personal/event.ics',
+		componentType,
 	})
 }
 
 const WINDOW_START = new Date(2026, 6, 1)
 const WINDOW_END = new Date(2026, 7, 1)
 
-describe('extractEvents', () => {
+describe('extractObjects (VEVENT)', () => {
 	it('reads a simple timed event', () => {
 		const events = parse(ics([
 			'BEGIN:VEVENT',
@@ -212,6 +213,130 @@ describe('extractEvents', () => {
 		].join('\r\n')), WINDOW_START, WINDOW_END)
 
 		expect(events).toHaveLength(0)
+	})
+})
+
+describe('extractObjects (VTODO)', () => {
+	it('places a task on its due date, matching the Calendar app', () => {
+		const tasks = parse(ics([
+			'BEGIN:VTODO',
+			'UID:card-1',
+			'DTSTAMP:20260701T000000Z',
+			'DTSTART:20260710T090000Z',
+			'DUE:20260730T140000Z',
+			'SUMMARY:کارت دک',
+			'END:VTODO',
+		].join('\r\n')), WINDOW_START, WINDOW_END, 'VTODO')
+
+		expect(tasks).toHaveLength(1)
+		expect(tasks[0].isTask).toBe(true)
+		expect(tasks[0].title).toBe('کارت دک')
+		// Shown when due, not for the three weeks it has been open.
+		expect(tasks[0].start).toEqual(tasks[0].end)
+		expect(tasks[0].start.toISOString()).toBe('2026-07-30T14:00:00.000Z')
+	})
+
+	it('ignores a task with no due date', () => {
+		const tasks = parse(ics([
+			'BEGIN:VTODO',
+			'UID:card-2',
+			'DTSTAMP:20260701T000000Z',
+			'DTSTART:20260710T090000Z',
+			'SUMMARY:بدون مهلت',
+			'END:VTODO',
+		].join('\r\n')), WINDOW_START, WINDOW_END, 'VTODO')
+
+		expect(tasks).toHaveLength(0)
+	})
+
+	it('flags a completed task by STATUS', () => {
+		const tasks = parse(ics([
+			'BEGIN:VTODO',
+			'UID:card-3',
+			'DTSTAMP:20260701T000000Z',
+			'DUE:20260730T140000Z',
+			'STATUS:COMPLETED',
+			'SUMMARY:انجام شد',
+			'END:VTODO',
+		].join('\r\n')), WINDOW_START, WINDOW_END, 'VTODO')
+
+		expect(tasks[0].completed).toBe(true)
+	})
+
+	it('flags a completed task by PERCENT-COMPLETE', () => {
+		const tasks = parse(ics([
+			'BEGIN:VTODO',
+			'UID:card-4',
+			'DTSTAMP:20260701T000000Z',
+			'DUE:20260730T140000Z',
+			'PERCENT-COMPLETE:100',
+			'SUMMARY:صددرصد',
+			'END:VTODO',
+		].join('\r\n')), WINDOW_START, WINDOW_END, 'VTODO')
+
+		expect(tasks[0].completed).toBe(true)
+	})
+
+	it('leaves a partially complete task open', () => {
+		const tasks = parse(ics([
+			'BEGIN:VTODO',
+			'UID:card-5',
+			'DTSTAMP:20260701T000000Z',
+			'DUE:20260730T140000Z',
+			'PERCENT-COMPLETE:40',
+			'SUMMARY:در جریان',
+			'END:VTODO',
+		].join('\r\n')), WINDOW_START, WINDOW_END, 'VTODO')
+
+		expect(tasks[0].completed).toBe(false)
+	})
+
+	it('handles an all-day due date', () => {
+		const tasks = parse(ics([
+			'BEGIN:VTODO',
+			'UID:card-6',
+			'DTSTAMP:20260701T000000Z',
+			'DUE;VALUE=DATE:20260730',
+			'SUMMARY:مهلت روزانه',
+			'END:VTODO',
+		].join('\r\n')), WINDOW_START, WINDOW_END, 'VTODO')
+
+		expect(tasks[0].allDay).toBe(true)
+		expect(dayKeysForEvent(tasks[0])).toEqual(['2026-07-30'])
+	})
+
+	it('gives every task in one object a distinct id', () => {
+		const tasks = parse(ics([
+			'BEGIN:VTODO',
+			'UID:multi-1',
+			'DTSTAMP:20260701T000000Z',
+			'DUE:20260730T140000Z',
+			'SUMMARY:یک',
+			'END:VTODO',
+			'BEGIN:VTODO',
+			'UID:multi-2',
+			'DTSTAMP:20260701T000000Z',
+			'DUE:20260730T150000Z',
+			'SUMMARY:دو',
+			'END:VTODO',
+		].join('\r\n')), WINDOW_START, WINDOW_END, 'VTODO')
+
+		expect(tasks).toHaveLength(2)
+		expect(new Set(tasks.map((task) => task.id)).size).toBe(2)
+	})
+
+	it('does not return events when asked for tasks', () => {
+		const tasks = parse(ics([
+			'BEGIN:VEVENT',
+			'UID:evt-1',
+			'DTSTAMP:20260701T000000Z',
+			'DTSTART:20260730T100000Z',
+			'DTEND:20260730T110000Z',
+			'SUMMARY:رویداد',
+			'END:VEVENT',
+		].join('\r\n')), WINDOW_START, WINDOW_END, 'VTODO')
+
+		expect(tasks).toHaveLength(0)
 	})
 })
 

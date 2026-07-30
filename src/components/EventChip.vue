@@ -7,22 +7,36 @@
 		:class="{
 			'event-chip--bar': isBar,
 			'event-chip--selected': selected,
+			'event-chip--task': event.isTask,
+			'event-chip--completed': event.completed,
 		}"
 		:style="{ '--event-color': event.color }"
 		:title="tooltip"
 		type="button"
 		@click.stop="$emit('select', event)">
-		<span v-if="!isBar" class="event-chip__dot" aria-hidden="true" />
-		<span v-if="!isBar" class="event-chip__time">{{ time }}</span>
+		<NcIconSvgWrapper v-if="event.isTask"
+			class="event-chip__icon"
+			:path="event.completed ? mdiCheckCircleOutline : mdiCircleOutline"
+			:size="12" />
+		<span v-else-if="!isBar" class="event-chip__dot" aria-hidden="true" />
+		<span v-if="showTime" class="event-chip__time">{{ time }}</span>
 		<span class="event-chip__title">{{ event.title }}</span>
 	</button>
 </template>
 
 <script>
+import { mdiCheckCircleOutline, mdiCircleOutline } from '@mdi/js'
+import { t } from '@nextcloud/l10n'
+import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+
 import { formatTime } from '../utils/jalali.js'
 
 export default {
 	name: 'EventChip',
+
+	components: {
+		NcIconSvgWrapper,
+	},
 
 	props: {
 		event: {
@@ -37,10 +51,23 @@ export default {
 
 	emits: ['select'],
 
+	setup() {
+		return { mdiCheckCircleOutline, mdiCircleOutline }
+	},
+
 	computed: {
-		/** All-day and multi-day events read better as a solid bar. */
+		/**
+		 * All-day and multi-day events read better as a solid bar. Tasks never
+		 * do — they mark a single due moment, and a full-width bar would read
+		 * as "all day long".
+		 */
 		isBar() {
-			return this.event.allDay || this.event.multiDay
+			return !this.event.isTask && (this.event.allDay || this.event.multiDay)
+		},
+
+		/** An all-day task has no meaningful clock time to show. */
+		showTime() {
+			return !this.isBar && !this.event.allDay
 		},
 
 		time() {
@@ -48,9 +75,17 @@ export default {
 		},
 
 		tooltip() {
-			return this.isBar
-				? `${this.event.title} — ${this.event.calendarName}`
-				: `${this.time} ${this.event.title} — ${this.event.calendarName}`
+			const parts = []
+			if (this.event.isTask) {
+				parts.push(this.event.completed
+					? t('jalali_calendar', 'Task (completed)')
+					: t('jalali_calendar', 'Task'))
+			}
+			if (!this.isBar && !this.event.allDay) {
+				parts.push(this.time)
+			}
+			parts.push(this.event.title, '—', this.event.calendarName)
+			return parts.join(' ')
 		},
 	},
 }
@@ -119,6 +154,19 @@ export default {
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+	}
+
+	&__icon {
+		flex: 0 0 auto;
+		color: var(--event-color);
+	}
+
+	&--completed {
+		color: var(--color-text-maxcontrast);
+
+		.event-chip__title {
+			text-decoration: line-through;
+		}
 	}
 }
 </style>

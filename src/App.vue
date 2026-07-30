@@ -43,17 +43,13 @@
 			<div class="calendar-view">
 				<div class="calendar-toolbar" dir="rtl" lang="fa">
 					<div class="calendar-toolbar__nav">
-						<NcButton :aria-label="t('jalali_calendar', 'Previous month')"
-							variant="tertiary"
-							@click="shiftMonth(-1)">
+						<NcButton :aria-label="previousLabel" variant="tertiary" @click="shift(-1)">
 							<template #icon>
 								<NcIconSvgWrapper :path="mdiChevronRight" />
 							</template>
 						</NcButton>
 
-						<NcButton :aria-label="t('jalali_calendar', 'Next month')"
-							variant="tertiary"
-							@click="shiftMonth(1)">
+						<NcButton :aria-label="nextLabel" variant="tertiary" @click="shift(1)">
 							<template #icon>
 								<NcIconSvgWrapper :path="mdiChevronLeft" />
 							</template>
@@ -65,13 +61,23 @@
 					</div>
 
 					<h2 class="calendar-toolbar__title">
-						{{ monthLabel }}
+						{{ current.title }}
 						<NcLoadingIcon v-if="loadingEvents" :size="20" />
 					</h2>
 
 					<p class="calendar-toolbar__gregorian">
 						{{ gregorianLabel }}
 					</p>
+
+					<div class="calendar-toolbar__views">
+						<NcButton v-for="option in viewOptions"
+							:key="option.id"
+							:variant="option.id === view ? 'primary' : 'tertiary'"
+							:aria-pressed="option.id === view"
+							@click="setView(option.id)">
+							{{ option.label }}
+						</NcButton>
+					</div>
 				</div>
 
 				<NcNoteCard v-if="calendarError"
@@ -99,11 +105,45 @@
 					}) }}
 				</NcNoteCard>
 
-				<MonthGrid :grid="grid"
+				<MonthGrid v-if="view === 'month'"
+					:grid="current"
 					:events-by-day="eventsByDay"
-					:selected-day-key="selectedDay ? selectedDay.key : null"
+					:off-days-by-day="offDaysByDay"
+					:limit-events="prefs.limitMonthEvents"
+					:show-week-numbers="prefs.showWeekNumbers"
+					:selected-day-key="selectedDayKey"
 					:selected-event-id="selectedEventId"
 					@select-day="onSelectDay"
+					@select-event="onSelectEvent" />
+
+				<TimeGridView v-else-if="view === 'day' || view === 'week'"
+					:key="view + current.days[0].key"
+					:days="current.days"
+					:events-by-day="eventsByDay"
+					:off-days-by-day="offDaysByDay"
+					:working="working"
+					:slot-duration="prefs.slotDuration"
+					:now="today"
+					:selected-event-id="selectedEventId"
+					:style="{ '--columns': current.days.length }"
+					@select-day="openDay"
+					@select-event="onSelectEvent" />
+
+				<YearView v-else-if="view === 'year'"
+					:jy="current.jy"
+					:first-day="firstDay"
+					:today="today"
+					:events-by-day="eventsByDay"
+					:off-days-by-day="offDaysByDay"
+					@select-day="openDay"
+					@select-month="openMonth" />
+
+				<ListView v-else
+					:days="current.days"
+					:events-by-day="eventsByDay"
+					:off-days-by-day="offDaysByDay"
+					:selected-event-id="selectedEventId"
+					@select-day="openDay"
 					@select-event="onSelectEvent" />
 			</div>
 		</NcAppContent>
@@ -130,22 +170,25 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 
 import DaySidebar from './components/DaySidebar.vue'
+import ListView from './components/ListView.vue'
 import MonthGrid from './components/MonthGrid.vue'
+import TimeGridView from './components/TimeGridView.vue'
+import YearView from './components/YearView.vue'
 import { useCalendarStore } from './store/calendarStore.js'
+import { fetchOffDays } from './utils/api.js'
 import { groupEventsByDay } from './utils/events.js'
-import {
-	addMonths,
-	buildMonthGrid,
-	dateToJalali,
-	dayKey,
-	formatMonthYear,
-} from './utils/jalali.js'
+import { SATURDAY, SUNDAY, dateToJalali, dayKey, formatMonthYear } from './utils/jalali.js'
+import { VIEWS, buildView, clampDay, isView, shiftAnchor } from './utils/views.js'
+
+/** Remembered per browser, like the calendar visibility toggles. */
+const VIEW_STORAGE_KEY = 'jalali_calendar:view'
 
 export default {
 	name: 'App',
 
 	components: {
 		DaySidebar,
+		ListView,
 		MonthGrid,
 		NcAppContent,
 		NcAppNavigation,
@@ -156,6 +199,8 @@ export default {
 		NcIconSvgWrapper,
 		NcLoadingIcon,
 		NcNoteCard,
+		TimeGridView,
+		YearView,
 	},
 
 	setup() {
@@ -169,14 +214,30 @@ export default {
 	data() {
 		const today = new Date()
 		const config = loadState('jalali_calendar', 'config', {})
-		const initial = config.initialMonth ?? dateToJalali(today)
+		const initial = config.initialMonth
+			? clampDay({ ...config.initialMonth, jd: 1 })
+			: dateToJalali(today)
 
 		return {
-			jy: initial.jy,
-			jm: initial.jm,
+			anchor: initial,
+			view: this.readStoredView(),
 			today,
 			calendarTimezone: config.timezone ?? null,
 			browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? null,
+			firstDay: config.firstDayOfWeek === 'sunday' ? SUNDAY : SATURDAY,
+			working: {
+				start: Number.isFinite(config.workStart) ? config.workStart : 9 * 60,
+				end: Number.isFinite(config.workEnd) ? config.workEnd : 17 * 60,
+				days: Array.isArray(config.workDays) ? config.workDays : [6, 0, 1, 2, 3],
+			},
+			prefs: {
+				showTasks: config.preferences?.showTasks ?? true,
+				limitMonthEvents: config.preferences?.limitMonthEvents ?? true,
+				showWeekends: config.preferences?.showWeekends ?? true,
+				showWeekNumbers: config.preferences?.showWeekNumbers ?? false,
+				slotDuration: config.preferences?.slotDuration ?? 30,
+			},
+			offDays: [],
 			selectedDayKey: null,
 			selectedEventId: null,
 			midnightTimer: null,
@@ -184,36 +245,83 @@ export default {
 	},
 
 	computed: {
-		grid() {
-			return buildMonthGrid(this.jy, this.jm, this.today)
+		current() {
+			const built = buildView(this.view, this.anchor, this.today, this.firstDay)
+			if (this.prefs.showWeekends || this.view === 'year' || this.view === 'list') {
+				return built
+			}
+
+			// Hiding the weekend drops a column from the grid; the CalDAV window
+			// is deliberately left alone, so an event on a hidden day is simply
+			// not drawn rather than silently refetched.
+			return { ...built, days: built.days.filter((day) => !day.isWeekend) }
 		},
 
-		monthLabel() {
-			return formatMonthYear(this.jy, this.jm)
+		/** Tasks are opt-out, matching the Calendar app. */
+		shownEvents() {
+			return this.prefs.showTasks
+				? this.visibleEvents
+				: this.visibleEvents.filter((event) => !event.isTask)
+		},
+
+		viewOptions() {
+			const labels = {
+				day: t('jalali_calendar', 'Day'),
+				week: t('jalali_calendar', 'Week'),
+				month: t('jalali_calendar', 'Month'),
+				year: t('jalali_calendar', 'Year'),
+				list: t('jalali_calendar', 'List'),
+			}
+			return VIEWS.map((id) => ({ id, label: labels[id] }))
+		},
+
+		previousLabel() {
+			return t('jalali_calendar', 'Previous')
+		},
+
+		nextLabel() {
+			return t('jalali_calendar', 'Next')
+		},
+
+		/** Identifies the visible window; changes exactly once per navigation. */
+		rangeKey() {
+			return `${this.current.rangeStart.getTime()}-${this.current.rangeEnd.getTime()}`
+		},
+
+		/** Map of day key -> off-day record. */
+		offDaysByDay() {
+			const map = new Map()
+			for (const offDay of this.offDays) {
+				map.set(offDay.gdate, offDay)
+			}
+			return map
 		},
 
 		/**
-		 * The Gregorian months the Jalali month straddles — useful for anyone
-		 * cross-checking against the official Calendar app.
+		 * The Gregorian span on screen — useful for anyone cross-checking
+		 * against the official Calendar app.
 		 */
 		gregorianLabel() {
-			const format = (date) => date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
-			const first = this.grid.days.find((day) => day.inCurrentMonth)
-			const last = [...this.grid.days].reverse().find((day) => day.inCurrentMonth)
-			const from = format(first.date)
-			const to = format(last.date)
+			const days = this.current.days
+			const format = (date) => date.toLocaleDateString('en-GB', {
+				day: this.view === 'day' || this.view === 'week' ? 'numeric' : undefined,
+				month: 'long',
+				year: 'numeric',
+			})
+			const from = format(days[0].date)
+			const to = format(days[days.length - 1].date)
 			return from === to ? from : `${from} – ${to}`
 		},
 
 		eventsByDay() {
-			return groupEventsByDay(this.visibleEvents, this.grid.days)
+			return groupEventsByDay(this.shownEvents, this.current.days)
 		},
 
 		selectedDay() {
 			if (this.selectedDayKey === null) {
 				return null
 			}
-			return this.grid.days.find((day) => day.key === this.selectedDayKey) ?? null
+			return this.current.days.find((day) => day.key === this.selectedDayKey) ?? null
 		},
 
 		selectedDayEvents() {
@@ -224,8 +332,7 @@ export default {
 		},
 
 		isViewingToday() {
-			const { jy, jm } = dateToJalali(this.today)
-			return this.jy === jy && this.jm === jm
+			return this.current.days.some((day) => day.isToday)
 		},
 
 		calendarErrorMessage() {
@@ -246,24 +353,25 @@ export default {
 
 	watch: {
 		/**
-		 * The visible Gregorian window changes with the month, so refetch. The
-		 * store discards responses that arrive out of order.
+		 * Any change of view or anchor moves the visible window, so refetch.
+		 * Watching one derived key rather than both ends of the range matters:
+		 * two watchers would fire two fetches for every navigation.
 		 */
-		grid: {
-			handler(grid) {
-				this.loadEvents(grid.rangeStart, grid.rangeEnd)
-			},
+		rangeKey() {
+			this.reloadRange()
 		},
 
-		// The sidebar shows a day from the current grid; leaving the month closes it.
-		'grid.jm'() {
-			this.closeSidebar()
+		// The sidebar shows a day from the current view; leaving it closes it.
+		'current.days'(days) {
+			if (this.selectedDayKey !== null && !days.some((day) => day.key === this.selectedDayKey)) {
+				this.closeSidebar()
+			}
 		},
 	},
 
 	async mounted() {
 		await this.loadCalendars()
-		await this.loadEvents(this.grid.rangeStart, this.grid.rangeEnd)
+		await this.reloadRange()
 		this.startMidnightWatch()
 	},
 
@@ -276,18 +384,46 @@ export default {
 	methods: {
 		t,
 
-		shiftMonth(delta) {
-			const { jy, jm } = addMonths(this.jy, this.jm, delta)
-			this.jy = jy
-			this.jm = jm
+		readStoredView() {
+			try {
+				const stored = window.localStorage.getItem(VIEW_STORAGE_KEY)
+				return isView(stored) ? stored : 'month'
+			} catch (error) {
+				return 'month'
+			}
+		},
+
+		setView(view) {
+			if (!isView(view) || view === this.view) {
+				return
+			}
+			this.view = view
+			try {
+				window.localStorage.setItem(VIEW_STORAGE_KEY, view)
+			} catch (error) {
+				// Remembering the choice is a convenience, not a requirement.
+			}
+		},
+
+		shift(delta) {
+			this.anchor = shiftAnchor(this.view, this.anchor, delta, this.firstDay)
 		},
 
 		goToToday() {
-			const { jy, jm } = dateToJalali(this.today)
-			this.jy = jy
-			this.jm = jm
-			this.selectedDayKey = dayKey(this.today)
+			this.anchor = dateToJalali(this.today)
+			this.selectedDayKey = null
 			this.selectedEventId = null
+		},
+
+		/** Clicking a day in the month, year or list view drills into it. */
+		openDay(day) {
+			this.anchor = { jy: day.jy, jm: day.jm, jd: day.jd }
+			this.setView('day')
+		},
+
+		openMonth(jm) {
+			this.anchor = clampDay({ ...this.anchor, jm, jd: 1 })
+			this.setView('month')
 		},
 
 		onSelectDay(day) {
@@ -305,9 +441,32 @@ export default {
 			this.selectedEventId = null
 		},
 
+		async reloadRange() {
+			const { rangeStart, rangeEnd, days } = this.current
+			await Promise.all([
+				this.loadEvents(rangeStart, rangeEnd),
+				this.loadOffDays(days),
+			])
+		},
+
+		/**
+		 * Official off-days are server-side data, independent of CalDAV, so a
+		 * failure here must not disturb the events already on screen.
+		 *
+		 * @param {object[]} days the days on screen
+		 */
+		async loadOffDays(days) {
+			try {
+				this.offDays = await fetchOffDays(days[0].key, days[days.length - 1].key)
+			} catch (error) {
+				console.error('[jalali_calendar] could not load off-days', error)
+				this.offDays = []
+			}
+		},
+
 		async reload() {
 			await this.loadCalendars()
-			await this.loadEvents(this.grid.rangeStart, this.grid.rangeEnd)
+			await this.reloadRange()
 		},
 
 		/**
@@ -321,6 +480,8 @@ export default {
 				}
 			}, 60 * 1000)
 		},
+
+		formatMonthYear,
 	},
 }
 </script>
@@ -338,9 +499,9 @@ export default {
 	align-items: center;
 	gap: 0 12px;
 	grid-template-areas:
-		'nav title'
-		'nav gregorian';
-	grid-template-columns: auto 1fr;
+		'nav title views'
+		'nav gregorian views';
+	grid-template-columns: auto 1fr auto;
 	padding: 8px 12px;
 
 	&__nav {
@@ -364,6 +525,14 @@ export default {
 		grid-area: gregorian;
 		color: var(--color-text-maxcontrast);
 		font-size: 13px;
+	}
+
+	&__views {
+		display: flex;
+		gap: 2px;
+		grid-area: views;
+		flex-wrap: wrap;
+		justify-content: flex-end;
 	}
 }
 
@@ -396,14 +565,21 @@ export default {
 	margin-top: 8px;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 900px) {
 	.calendar-toolbar {
 		grid-template-areas:
-			'title nav'
-			'gregorian gregorian';
+			'nav title'
+			'gregorian gregorian'
+			'views views';
+		grid-template-columns: auto 1fr;
 
 		&__title {
 			font-size: 17px;
+		}
+
+		&__views {
+			justify-content: flex-start;
+			margin-top: 4px;
 		}
 	}
 }

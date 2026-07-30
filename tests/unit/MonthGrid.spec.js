@@ -45,6 +45,30 @@ function timedEvent(id, hour, title) {
 	}
 }
 
+/**
+ * A Deck-style task: due at a moment, start === end.
+ *
+ * @param {string} id task id
+ * @param {boolean} completed whether it is done
+ * @param {boolean} allDay whether the due date is date-only
+ * @return {object}
+ */
+function task(id, completed = false, allDay = false) {
+	const due = allDay ? new Date(2026, 6, 30) : new Date(2026, 6, 30, 12)
+	return {
+		id,
+		title: 'کارت دک',
+		start: due,
+		end: due,
+		allDay,
+		isTask: true,
+		completed,
+		color: '#0082c9',
+		calendarId: 'deck',
+		calendarName: 'Deck: Roadmap',
+	}
+}
+
 describe('MonthGrid', () => {
 	it('renders six weeks of cells and seven weekday headers', () => {
 		const wrapper = mountGrid()
@@ -55,7 +79,21 @@ describe('MonthGrid', () => {
 
 	it('starts the week on Saturday', () => {
 		const wrapper = mountGrid()
-		expect(wrapper.findAll('.month-grid__weekday')[0].text()).toBe('ش')
+		expect(wrapper.findAll('.month-grid__weekday-full')[0].text()).toBe('شنبه')
+	})
+
+	it('labels the columns with full weekday names', () => {
+		const names = mountGrid().findAll('.month-grid__weekday-full').map((h) => h.text())
+
+		expect(names).toEqual(['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'])
+	})
+
+	it('also carries a single-letter form for narrow screens', () => {
+		const short = mountGrid().findAll('.month-grid__weekday-short')
+
+		expect(short.map((h) => h.text())).toEqual(['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'])
+		// Decorative: the full name is what gets announced.
+		expect(short[0].attributes('aria-hidden')).toBe('true')
 	})
 
 	it('lays the grid out right-to-left', () => {
@@ -124,6 +162,29 @@ describe('MonthGrid', () => {
 		expect(wrapper.emitted('select-event')[0][1].id).toBe('a')
 		// The chip stops propagation, so the cell must not fire as well.
 		expect(wrapper.emitted('select-day')).toBeUndefined()
+	})
+
+	it('renders a Deck task as a task chip, not an all-day bar', () => {
+		const chip = mountGrid([task('deck-1', false, true)]).find('.event-chip')
+
+		expect(chip.classes()).toContain('event-chip--task')
+		// An all-day bar would swallow the task icon and read as "all day long".
+		expect(chip.classes()).not.toContain('event-chip--bar')
+	})
+
+	it('marks a completed task', () => {
+		const chip = mountGrid([task('deck-2', true)]).find('.event-chip')
+		expect(chip.classes()).toContain('event-chip--completed')
+	})
+
+	it('shows no clock time for an all-day task', () => {
+		const chip = mountGrid([task('deck-3', false, true)]).find('.event-chip')
+		expect(chip.text()).not.toContain('۰۰:۰۰')
+	})
+
+	it('shows the due time for a timed task', () => {
+		const chip = mountGrid([task('deck-4', false, false)]).find('.event-chip')
+		expect(chip.text()).toContain('۱۲:۰۰')
 	})
 
 	it('is keyboard reachable and announces each day', () => {

@@ -33,7 +33,7 @@ distclean: clean
 # Everything a released app needs at runtime, and nothing else. This is a
 # whitelist on purpose: an exclude list silently ships whatever happens to be
 # lying around in the working tree.
-app_files = appinfo lib templates l10n img js README.md CHANGELOG.md LICENSE
+app_files = appinfo lib templates l10n img js data README.md CHANGELOG.md LICENSE
 
 # Build a release tarball and, when the certificate is present, sign it.
 # The signature file is what apps.nextcloud.com asks for at upload time.

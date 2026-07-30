@@ -10,6 +10,162 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-30
+
+### Added
+
+- **Personal settings** (Settings → Personal → Jalali Calendar), mirroring the
+  options the official Calendar app offers, minus everything that only means
+  something once you can create events:
+  - Show tasks in calendar
+  - Limit the number of events displayed in the monthly view
+  - Show weekends — hiding them drops the Friday column to a six-day grid
+  - Show week numbers — the Jalali week of the year, per row
+  - Time increments (15 / 30 / 60 minutes), ruling the day and week grids
+  - Copy the primary and iOS/macOS CalDAV addresses
+  - A link to Nextcloud's own availability settings
+- `jalaliWeekNumber()`, counting the week containing Farvardin 1 as week one.
+
+### Notes
+
+Deliberately not carried over from the Calendar app's settings panel, because
+this app is read-only: the simplified editor, default reminder and default
+attachments location have nothing to configure without event creation, and
+"Enable birthday calendar" is a `dav` setting owned by the Calendar app rather
+than this one. A timezone override is not included either — rendering in a
+zone other than the browser's needs the date handling reworked across every
+view, so it is left for its own release rather than half-done.
+
+
+## [0.3.0] - 2026-07-30
+
+### Added
+
+- **Five views**: Day, Week, Month, Year and List, switchable from the toolbar
+  and remembered per browser. Navigation steps by whatever the view shows — a
+  day, a week, a month or a year — and each fetches only the window it needs.
+  - **Day / Week**: an hour grid with events positioned by clock time.
+    Overlapping events share the column width, and a line marks the current
+    time. All-day and multi-day events sit in a bar above the grid.
+  - **Year**: twelve mini months, with a dot on days that have events. Click a
+    month name to open it, or a day to drill into it.
+  - **List**: an agenda of the month, showing only days with something on them.
+- **Working hours** (Settings → Administration → Jalali Calendar): a start and
+  end time plus which weekdays count as working days, defaulting to
+  09:00-17:00, Saturday to Wednesday. Hours outside them are shaded in the day
+  and week views, which also open scrolled to the start of the working day.
+
+### Fixed
+
+- Navigating refetched events twice, because the visible window's start and end
+  were watched separately. Now one derived key, one fetch.
+
+
+## [0.2.5] - 2026-07-30
+
+### Changed
+
+- The grid header now shows **full weekday names** (شنبه، یکشنبه، …) instead of
+  single letters. Below 640px, where «چهارشنبه» no longer fits, it falls back to
+  the letter — the full name stays in the accessibility tree either way.
+
+
+## [0.2.4] - 2026-07-30
+
+### Fixed
+
+- **Deleting an off-day returned HTTP 500.** `OffDayService::delete()` called
+  `OffDayMapper::find()`, which does not exist: `QBMapper` — unlike the
+  deprecated `Mapper` it replaced — provides no find-by-id. Added one. Deleting
+  a row that is already gone now returns 404 instead of a fatal error.
+
+
+## [0.2.3] - 2026-07-30
+
+### Fixed
+
+- **Religious holidays landed a day early.** The bundled `shamsi-holidays`
+  dataset computes lunar dates on Umm al-Qura reckoning, which runs a day
+  behind Iran's official reckoning — Arbaeen 1405 came out as 12 Mordad
+  instead of 13. Confirmed against `Intl` (`islamic-umalqura` → 2026-08-03,
+  `islamic-tbla` → 2026-08-04); solar and weekly dates were never affected.
+- Importing the **current** Jalali year now reads
+  `https://www.time.ir/event-year` live. That page is server-rendered, covers a
+  whole year, and carries each occasion's real name — so dates and titles match
+  time.ir exactly, and generic «تعطیل رسمی» labels are gone. Other years still
+  come from the bundled dataset.
+- Two occasions falling on the same day are **merged** rather than one
+  overwriting the other (1 Farvardin 1405 is both Nowruz and Eid al-Fitr).
+- The month name «اَمرداد» that time.ir uses was not recognised, which silently
+  dropped every Mordad holiday.
+
+
+## [0.2.1] - 2026-07-30
+
+### Changed
+
+- **Official Iranian holidays now ship with the app** as
+  `data/ir-holidays.json`, generated offline from the `shamsi-holidays` npm
+  package (time.ir's official dates) by `npm run generate:holidays`. Covers
+  Jalali years 1400-1406, 524 days.
+- The import therefore needs **no API key and no network access**. The
+  time.ir API client and the `timeIrApiKey` setting are gone.
+- The upstream list marks every Friday as a holiday — 52 of a year's 75
+  entries. Those are skipped on import: the grid already draws Friday as the
+  weekend, and a generic label on every Friday cell buries the occasions that
+  matter. A *named* holiday falling on a Friday is still imported.
+
+
+## [0.2.0] - 2026-07-30
+
+### Added
+
+- **Administration page** (Settings → Administration → Jalali Calendar).
+- **Week start** is now configurable instance-wide: Saturday (شنبه) or
+  Sunday (یک‌شنبه). The grid, its column headers and the weekend column all
+  follow the setting.
+- **Off-days**: official holidays are stored server-side and shown to every
+  user, with the occasion's name on the day and the date in the weekend colour.
+- Admins can **add and remove off-days by hand**.
+- **Import** off-days for a Jalali year, from either time.ir (needs an API key,
+  see below) or any iCalendar (.ics) feed. Re-importing replaces only what the
+  same source imported before, so manual entries always survive.
+- A PHP Jalali converter, verified to agree with `jalaali-js` byte-for-byte
+  across ~55,000 Jalali and ~50,000 Gregorian dates.
+- Parity with the official Calendar app's calendar list: webcal
+  **subscriptions**, the birthday calendar and **app-generated calendars such
+  as Deck boards** now appear alongside personal calendars.
+- **Tasks (`VTODO`) are rendered**, on their due date, exactly as the Calendar
+  app does it — a task with no due date is not shown, and completed tasks
+  (`STATUS:COMPLETED` or `PERCENT-COMPLETE:100`) are struck through.
+- Webcal caching header (`X-NC-CalDAV-Webcal-Caching`), so subscriptions are
+  not refetched from their remote source on every request.
+
+### Changed
+
+- Lowered the minimum Nextcloud version from 31 to **30**, after verifying the
+  app installs, enables and serves correctly on 30.0.17.
+
+### Fixed
+
+- Subscriptions were missing entirely: `findAllCalendars()` filters them out,
+  so `findAllCalDAVCollectionsGrouped()` is used instead.
+- Deck boards were invisible. Deck advertises
+  `supported-calendar-component-set = VTODO` only, so the previous
+  VEVENT-only filter dropped every board, and a VEVENT query would have
+  returned nothing regardless.
+- Each collection is now queried only for the component types it advertises,
+  instead of assuming `VEVENT`.
+- The admin settings bundle shipped without its styles, because a single
+  entry point received all injected CSS. Fixed with per-entry CSS injection.
+
+### Notes
+
+- time.ir publishes no free feed. Their website ignores year/month parameters
+  server-side and renders only the current month, and `api.time.ir` requires a
+  key, so the importer asks the administrator to supply one. The iCalendar
+  importer needs no key and is the simpler route.
+
 ## [0.1.0] - 2026-07-30
 
 First release — read-only Jalali month view.
@@ -41,5 +197,9 @@ First release — read-only Jalali month view.
 - Month view only — no week or day view yet.
 - No Iranian holidays overlay yet.
 
-[Unreleased]: https://github.com/naserfathi/jalali_calendar/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/naserfathi/jalali_calendar/releases/tag/v0.1.0
+[Unreleased]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.2.4
+[0.2.3]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.2.3
+[0.2.1]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.2.1
+[0.2.0]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.2.0
+[0.1.0]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.1.0

@@ -17,9 +17,12 @@ a display layer; events are always stored as Gregorian/UTC.**
 
 ## Status
 
-**v0.1.0 — read-only.** This is the MVP described in `JALALI_CALENDAR_PLAN.md`:
+**v0.2.0 — read-only calendar, with an administration page.**
 
-- [x] Jalali month view of all your existing calendars
+- [x] Jalali month view of **everything the Calendar app shows**: your own
+      calendars, webcal subscriptions, the birthday calendar, and
+      app-generated calendars such as **Deck** boards
+- [x] Tasks (`VTODO`) shown on their due date, completed ones struck through
 - [x] Persian month/weekday names, Saturday-first week, Persian numerals
 - [x] Per-calendar colours and show/hide toggles (remembered per browser)
 - [x] Recurring events expanded within the visible window, including
@@ -27,9 +30,13 @@ a display layer; events are always stored as Gregorian/UTC.**
 - [x] Day panel with event details (time, location, calendar, description)
 - [x] RTL layout, Farsi translation
 - [x] Warns when the device timezone differs from your calendar timezone
+- [x] **Administration page**: week start, off-days, and import
+- [x] **Off-days** shown on the grid, with the occasion's name
+- [x] **Day, Week, Month, Year and List views**
+- [x] **Working hours** shaded in the day and week views
+- [x] **Personal settings**: tasks, event cap, weekends, week numbers, time
+      increments, CalDAV addresses
 - [ ] Creating, editing and deleting events — planned for v0.2
-- [ ] Week and day views — planned for v0.3
-- [ ] Iranian holidays overlay — planned for v0.4
 
 Events are created and edited in the official Calendar app; this app coexists
 with it rather than replacing it.
@@ -41,17 +48,98 @@ configured for your calendars. When the two differ the app says so, but the
 displayed clock times will not match the Calendar app until v0.2 handles
 timezones properly.
 
+Recurring **tasks** are shown only at their first due date; recurring *events*
+expand normally.
+
+## Personal settings
+
+**Settings → Personal → Jalali Calendar**, per user: show tasks, cap events in
+the month view, show or hide weekends, show Jalali week numbers, choose the
+time increments the day and week grids are ruled at, and copy the CalDAV
+addresses for a phone or desktop client.
+
+## Administration
+
+**Settings → Administration → Jalali Calendar** (admin only):
+
+**Working hours.** A start and end time, plus which weekdays count as working
+days (default 09:00-17:00, Saturday to Wednesday). Hours outside them are
+shaded in the day and week views, which open scrolled to the working day.
+
+**Week start.** Saturday (شنبه, the Iranian default) or Sunday (یک‌شنبه).
+Applies to everyone on the server: the grid, its column headers and the
+weekend column all move together. Friday stays the weekend either way.
+
+**Off-days.** Official holidays live on the server and are shown to every
+user — the occasion's name appears on the day and the date takes the weekend
+colour. Admins can add and remove entries by hand, or import a whole Jalali
+year.
+
+Imports are keyed by source, so re-importing replaces only what that same
+source wrote before; anything added by hand always survives.
+
+### Official Iranian holidays
+
+Importing tries two routes in order:
+
+1. **Live from time.ir** — `https://www.time.ir/event-year` is server-rendered
+   and lists a whole Jalali year of occasions, each flagged as a holiday. Dates
+   *and* names match time.ir exactly. It only ever serves the **current** Jalali
+   year (`?year=` is accepted but ignored), so it is used for that year only.
+2. **Bundled dataset** — `data/ir-holidays.json`, generated offline from the
+   [`shamsi-holidays`](https://www.npmjs.com/package/shamsi-holidays) package,
+   covering Jalali **1400-1406**. Used for any other year, or if time.ir is
+   unreachable. Regenerate with `npm run generate:holidays`.
+
+**Know this about the bundled dataset:** it computes lunar (religious) holidays
+on Umm al-Qura reckoning, which runs a day earlier than Iran's official
+reckoning. Arbaeen 1405 is 12 Mordad there but 13 Mordad on time.ir. Solar
+national days and weekly Fridays are unaffected. That is why the live route is
+preferred for the current year.
+
+The upstream dataset also marks every Friday as a holiday (52 of a year's 75
+entries). Those are skipped — the grid already draws Friday as the weekend, so
+importing them would only print a generic label on every Friday cell.
+
+For a year neither route covers, or a non-Iranian holiday set, use the
+**iCalendar (.ics)** importer — parsed with the sabre/vobject Nextcloud bundles.
+
+## Where events come from
+
+The app lists the same collections as the official Calendar app, via
+`findAllCalDAVCollectionsGrouped()`:
+
+| Source | Component | Notes |
+|---|---|---|
+| Personal / shared calendars | `VEVENT` + `VTODO` | |
+| **Deck** boards | `VTODO` only | Named `Deck: <board>`; cards appear on their due date |
+| webcal subscriptions | `VEVENT` (+ `VTODO`) | Honours the "strip todos" flag |
+| Birthday calendar | `VEVENT` | |
+| Tasks app lists | `VTODO` | Shown on the due date |
+
+Two details are easy to get wrong and are covered by tests:
+
+- `findAllCalendars()` **excludes subscriptions**, so it is deliberately not
+  used — holiday and other webcal calendars would silently vanish.
+- Deck advertises `supported-calendar-component-set = VTODO` **only**. Filtering
+  calendars on `VEVENT`, or querying boards for `VEVENT`, hides every board.
+
+Each collection is asked only for the component types it actually advertises,
+so a Deck board costs exactly one CalDAV request.
+
 ## Requirements
 
-- Nextcloud **31 or 32** — the UI is built on `@nextcloud/vue` 9, which
-  requires Nextcloud 31+
+- Nextcloud **30, 31 or 32**. The UI is built on `@nextcloud/vue` 9, which
+  officially targets 31+, but the app bundles its own Vue 3 runtime and uses
+  only layout components and long-standing colour variables. Verified running
+  on 30.0.17; on 30 some spacing/colour details may differ from 31+.
 - PHP 8.1+
 - Node 20+ and npm (to build from source)
 
 ## Install from source
 
 ```bash
-git clone https://github.com/naserfathi/jalali_calendar.git
+git clone https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi.git
 cd jalali_calendar
 npm ci
 npm run build
@@ -98,11 +186,22 @@ Browser (Vue 3 SPA)
   └─ src/store/            shared reactive state
         ▲
         │ initial state (timezone, deep-linked month)
-PHP backend (thin: Application, PageController, one route)
+PHP backend
+  ├─ Controller/PageController      page shell + initial state
+  ├─ Controller/OffDayController    off-day CRUD + import (OCS)
+  ├─ Controller/AdminConfigController
+  ├─ Service/JalaliConverter        Jalali <-> Gregorian, server side
+  ├─ Service/ImportService          time.ir API / .ics feeds
+  └─ Db/OffDayMapper                table `jalali_offdays`
 ```
 
-The backend serves the page shell and nothing else — all calendar traffic goes
-straight from the browser to CalDAV, exactly as the official Calendar app does.
+Calendar *events* never touch the backend — they go straight from the browser
+to CalDAV, exactly as the official Calendar app does. Only the off-day list
+and the instance settings are server-side.
+
+`JalaliConverter` is a port of the `jalaali-js` algorithm the frontend uses.
+The two are checked against each other by comparing SHA-256 digests over every
+date in Jalali years 1300-1450 and Gregorian 1920-2070 — they agree exactly.
 
 Rendering a Jalali month means fetching the *Gregorian* window that covers it.
 `buildMonthGrid()` always returns six full weeks starting on a Saturday, and

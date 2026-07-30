@@ -10,6 +10,8 @@ declare(strict_types=1);
 namespace OCA\JalaliCalendar\Controller;
 
 use OCA\JalaliCalendar\AppInfo\Application;
+use OCA\JalaliCalendar\Service\ConfigService;
+use OCA\JalaliCalendar\Service\UserConfigService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
@@ -27,6 +29,8 @@ class PageController extends Controller {
 		private IInitialState $initialState,
 		private IConfig $config,
 		private IUserSession $userSession,
+		private ConfigService $configService,
+		private UserConfigService $userConfigService,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -61,6 +65,11 @@ class PageController extends Controller {
 			'timezone' => $timezone,
 			'version' => $this->config->getAppValue(Application::APP_ID, 'installed_version', '0.0.0'),
 			'initialMonth' => ($jy !== null && $jm >= 1 && $jm <= 12) ? ['jy' => $jy, 'jm' => $jm] : null,
+			'firstDayOfWeek' => $this->configService->getFirstDayOfWeek(),
+			'workStart' => $this->configService->getWorkStart(),
+			'workEnd' => $this->configService->getWorkEnd(),
+			'workDays' => $this->configService->getWorkDays(),
+			'preferences' => $this->userConfigService->getAll($userId),
 		]);
 
 		Util::addTranslations(Application::APP_ID);

@@ -11,9 +11,12 @@ import { t } from '@nextcloud/l10n'
 import { generateRemoteUrl } from '@nextcloud/router'
 import DavClient from '@nextcloud/cdav-library'
 
-import { extractEvents } from './events.js'
+import { extractObjects } from './events.js'
 
 const DEFAULT_COLOR = '#0082c9'
+
+export const VEVENT = 'VEVENT'
+export const VTODO = 'VTODO'
 
 let clientPromise = null
 
@@ -29,6 +32,9 @@ export async function getClient() {
 			defaultHeaders: {
 				'X-Requested-With': 'XMLHttpRequest',
 				requesttoken: getRequestToken() ?? '',
+				// Ask the server to cache webcal subscriptions rather than
+				// refetch the remote source on every single request.
+				'X-NC-CalDAV-Webcal-Caching': 'On',
 			},
 		})
 
@@ -58,34 +64,43 @@ function normalizeColor(color) {
 }
 
 /**
- * @param {object} davCalendar a cdav-library Calendar
- * @return {boolean} whether the calendar can hold events at all
+ * Describe a CalDAV collection in plain, reactive-safe terms.
+ *
+ * The supported-component-set is what decides whether we ask a collection for
+ * events, tasks or both. It matters more than it looks: Deck advertises
+ * `VTODO` *only*, so filtering on VEVENT alone silently hides every board.
+ * An absent set means "everything" per RFC 4791.
+ *
+ * @param {object} davCollection a cdav-library Calendar or Subscription
+ * @param {boolean} isSubscription whether it came from the subscription list
+ * @return {object}
  */
-function supportsEvents(davCalendar) {
-	const components = davCalendar.components
-	// An absent supported-component-set means "everything" per RFC 4791.
-	return !Array.isArray(components) || components.length === 0 || components.includes('VEVENT')
-}
+function toPlainCalendar(davCollection, isSubscription) {
+	const components = davCollection.components
+	const unrestricted = !Array.isArray(components) || components.length === 0
 
-/**
- * @param {object} davCalendar a cdav-library Calendar
- * @return {object} a plain, reactive-safe description of the calendar
- */
-function toPlainCalendar(davCalendar) {
 	return {
-		id: davCalendar.url,
-		url: davCalendar.url,
-		displayName: (davCalendar.displayname ?? '').trim() || t('jalali_calendar', 'Untitled calendar'),
-		color: normalizeColor(davCalendar.color),
-		order: Number.isFinite(davCalendar.order) ? davCalendar.order : Number.MAX_SAFE_INTEGER,
+		id: davCollection.url,
+		url: davCollection.url,
+		displayName: (davCollection.displayname ?? '').trim() || t('jalali_calendar', 'Untitled calendar'),
+		color: normalizeColor(davCollection.color),
+		order: Number.isFinite(davCollection.order) ? davCollection.order : Number.MAX_SAFE_INTEGER,
 		// Calendars the user disabled in the official Calendar app start hidden here too.
-		enabledOnServer: davCalendar.enabled !== false,
-		dav: davCalendar,
+		enabledOnServer: davCollection.enabled !== false,
+		supportsEvents: unrestricted || components.includes(VEVENT),
+		// A subscription may be configured to drop the todos it imports.
+		supportsTasks: (unrestricted || components.includes(VTODO))
+			&& davCollection.stripTodos !== true,
+		isSubscription,
+		dav: davCollection,
 	}
 }
 
 /**
- * List the user's event calendars, ordered the way the Calendar app orders them.
+ * List everything the Calendar app would list: real calendars, webcal
+ * subscriptions, and app-generated calendars such as Deck boards.
+ *
+ * `findAllCalendars()` is deliberately not used — it filters subscriptions out.
  *
  * @return {Promise<object[]>}
  */
@@ -97,16 +112,70 @@ export async function fetchCalendars() {
 		return []
 	}
 
-	const calendars = await home.findAllCalendars()
+	const { calendars, subscriptions } = await home.findAllCalDAVCollectionsGrouped()
 
-	return calendars
-		.filter(supportsEvents)
-		.map(toPlainCalendar)
+	return [
+		...calendars.map((calendar) => toPlainCalendar(calendar, false)),
+		...subscriptions.map((subscription) => toPlainCalendar(subscription, true)),
+	]
+		.filter((calendar) => calendar.supportsEvents || calendar.supportsTasks)
 		.sort((a, b) => a.order - b.order || a.displayName.localeCompare(b.displayName, 'fa'))
 }
 
 /**
- * Fetch and parse every event overlapping a Gregorian window.
+ * Which component types are worth asking a given collection for.
+ *
+ * @param {object} calendar a plain calendar
+ * @return {string[]}
+ */
+function queryableTypes(calendar) {
+	const types = []
+	if (calendar.supportsEvents) {
+		types.push(VEVENT)
+	}
+	if (calendar.supportsTasks) {
+		types.push(VTODO)
+	}
+	return types
+}
+
+/**
+ * Fetch and parse everything renderable in one collection.
+ *
+ * Each component type is a separate time-range REPORT, matching the type the
+ * collection actually advertises, so a Deck board costs exactly one request.
+ *
+ * @param {object} calendar a plain calendar
+ * @param {Date} rangeStart window start, inclusive
+ * @param {Date} rangeEnd window end, exclusive
+ * @return {Promise<object[]>}
+ */
+async function fetchFromCalendar(calendar, rangeStart, rangeEnd) {
+	const perType = await Promise.all(queryableTypes(calendar).map(async (componentType) => {
+		const objects = await calendar.dav.findByTypeInTimeRange(componentType, rangeStart, rangeEnd)
+
+		return objects.flatMap((object) => {
+			try {
+				return extractObjects(object.data, {
+					rangeStart,
+					rangeEnd,
+					calendar,
+					objectUrl: object.url,
+					componentType,
+				})
+			} catch (error) {
+				// A single unparsable object should not cost us the calendar.
+				console.error('[jalali_calendar] could not parse', object.url, error)
+				return []
+			}
+		})
+	}))
+
+	return perType.flat()
+}
+
+/**
+ * Fetch and parse every event and task overlapping a Gregorian window.
  *
  * One unreachable or malformed calendar must not blank the whole month, so
  * failures are collected and reported alongside whatever did load.
@@ -117,24 +186,9 @@ export async function fetchCalendars() {
  * @return {Promise<{events: object[], failures: object[]}>}
  */
 export async function fetchEventsInRange(calendars, rangeStart, rangeEnd) {
-	const settled = await Promise.allSettled(calendars.map(async (calendar) => {
-		const objects = await calendar.dav.findByTypeInTimeRange('VEVENT', rangeStart, rangeEnd)
-
-		return objects.flatMap((object) => {
-			try {
-				return extractEvents(object.data, {
-					rangeStart,
-					rangeEnd,
-					calendar,
-					objectUrl: object.url,
-				})
-			} catch (error) {
-				// A single unparsable object should not cost us the calendar.
-				console.error('[jalali_calendar] could not parse', object.url, error)
-				return []
-			}
-		})
-	}))
+	const settled = await Promise.allSettled(
+		calendars.map((calendar) => fetchFromCalendar(calendar, rangeStart, rangeEnd)),
+	)
 
 	const events = []
 	const failures = []

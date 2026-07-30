@@ -7,11 +7,17 @@ import { join, resolve } from 'path'
 
 export default createAppConfig({
 	main: resolve(join('src', 'main.js')),
+	admin: resolve(join('src', 'admin.js')),
+	personal: resolve(join('src', 'personal.js')),
 }, {
 	// Styles ride along in the bundle: building them separately emits
 	// hash-named chunks that Util::addStyle() has no way to reference.
-	// PageController therefore only registers the script.
-	inlineCSS: true,
+	// The controllers therefore only register scripts.
+	//
+	// relativeCSSInjection matters once there is more than one entry point:
+	// without it every entry's CSS is injected from a single chunk, so the
+	// admin settings page — which loads only its own bundle — renders unstyled.
+	inlineCSS: { relativeCSSInjection: true },
 	extractLicenseInformation: true,
 	thirdPartyLicense: false,
 	config: {

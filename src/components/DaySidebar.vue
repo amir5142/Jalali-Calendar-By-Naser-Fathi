@@ -26,12 +26,30 @@
 						<summary class="event-details__summary">
 							<span class="event-details__bar" aria-hidden="true" />
 							<span class="event-details__text">
-								<span class="event-details__title">{{ event.title }}</span>
+								<span class="event-details__title"
+									:class="{ 'event-details__title--completed': event.completed }">
+									<NcIconSvgWrapper v-if="event.isTask"
+										:path="event.completed ? mdiCheckCircleOutline : mdiCircleOutline"
+										:size="16" />
+									{{ event.title }}
+								</span>
 								<span class="event-details__when">{{ formatWhen(event) }}</span>
 							</span>
 						</summary>
 
 						<dl class="event-details__body">
+							<template v-if="event.isTask">
+								<dt>
+									<NcIconSvgWrapper :path="mdiFormatListChecks" :size="16" />
+									{{ t('jalali_calendar', 'Type') }}
+								</dt>
+								<dd>
+									{{ event.completed
+										? t('jalali_calendar', 'Task (completed)')
+										: t('jalali_calendar', 'Task') }}
+								</dd>
+							</template>
+
 							<template v-if="event.location">
 								<dt>
 									<NcIconSvgWrapper :path="mdiMapMarkerOutline" :size="16" />
@@ -73,6 +91,9 @@
 import {
 	mdiCalendarBlankOutline,
 	mdiCalendarOutline,
+	mdiCheckCircleOutline,
+	mdiCircleOutline,
+	mdiFormatListChecks,
 	mdiMapMarkerOutline,
 	mdiRepeat,
 	mdiTextBoxOutline,
@@ -120,6 +141,9 @@ export default {
 		return {
 			mdiCalendarBlankOutline,
 			mdiCalendarOutline,
+			mdiCheckCircleOutline,
+			mdiCircleOutline,
+			mdiFormatListChecks,
 			mdiMapMarkerOutline,
 			mdiRepeat,
 			mdiTextBoxOutline,
@@ -162,6 +186,14 @@ export default {
 		 * @return {string}
 		 */
 		formatWhen(event) {
+			// A task marks a single due moment; start equals end, so the
+			// generic range formatting below would render "14:00 – 14:00".
+			if (event.isTask) {
+				return event.allDay
+					? t('jalali_calendar', 'Due today')
+					: t('jalali_calendar', 'Due at {time}', { time: formatTime(event.start) })
+			}
+
 			if (event.allDay && !event.multiDay) {
 				return t('jalali_calendar', 'All day')
 			}
@@ -232,9 +264,17 @@ export default {
 	}
 
 	&__title {
+		display: flex;
+		align-items: center;
+		gap: 4px;
 		overflow: hidden;
 		font-weight: bold;
 		text-overflow: ellipsis;
+
+		&--completed {
+			color: var(--color-text-maxcontrast);
+			text-decoration: line-through;
+		}
 	}
 
 	&__when {

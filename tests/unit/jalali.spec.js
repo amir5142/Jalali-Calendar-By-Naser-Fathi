@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
 	DAYS_IN_GRID,
+	SATURDAY,
+	SUNDAY,
 	JALALI_MONTHS,
 	WEEKDAYS,
 	addMonths,
@@ -20,6 +22,9 @@ import {
 	jalaliToDate,
 	toPersianDigits,
 	weekdayIndex,
+	weekdayNameFor,
+	weekdayNames,
+	weekendColumn,
 } from '../../src/utils/jalali.js'
 
 describe('digit formatting', () => {
@@ -78,11 +83,72 @@ describe('Gregorian <-> Jalali conversion', () => {
 })
 
 describe('weekdayIndex', () => {
-	it('treats Saturday as the first day of the week', () => {
+	it('treats Saturday as the first day of the week by default', () => {
 		// 2026-07-25 is a Saturday.
 		expect(weekdayIndex(new Date(2026, 6, 25))).toBe(0)
 		expect(weekdayIndex(new Date(2026, 6, 26))).toBe(1) // Sunday
 		expect(weekdayIndex(new Date(2026, 6, 31))).toBe(6) // Friday
+	})
+
+	it('shifts every column when the week starts on Sunday', () => {
+		expect(weekdayIndex(new Date(2026, 6, 26), SUNDAY)).toBe(0) // Sunday
+		expect(weekdayIndex(new Date(2026, 6, 31), SUNDAY)).toBe(5) // Friday
+		expect(weekdayIndex(new Date(2026, 6, 25), SUNDAY)).toBe(6) // Saturday
+	})
+})
+
+describe('week start configuration', () => {
+	it('rotates the weekday labels', () => {
+		expect(weekdayNames(SATURDAY)[0]).toBe('شنبه')
+		expect(weekdayNames(SUNDAY)[0]).toBe('یکشنبه')
+		expect(weekdayNames(SUNDAY)[6]).toBe('شنبه')
+	})
+
+	it('keeps all seven labels, without duplicates, either way', () => {
+		for (const firstDay of [SATURDAY, SUNDAY]) {
+			const names = weekdayNames(firstDay)
+			expect(names).toHaveLength(7)
+			expect(new Set(names).size).toBe(7)
+		}
+	})
+
+	it('moves the weekend column with the week start', () => {
+		expect(weekendColumn(SATURDAY)).toBe(6)
+		expect(weekendColumn(SUNDAY)).toBe(5)
+		// Whichever way round, the weekend column is Friday.
+		expect(weekdayNames(SATURDAY)[weekendColumn(SATURDAY)]).toBe('جمعه')
+		expect(weekdayNames(SUNDAY)[weekendColumn(SUNDAY)]).toBe('جمعه')
+	})
+
+	it('names a date the same regardless of week start', () => {
+		expect(weekdayNameFor(new Date(2026, 6, 25))).toBe('شنبه')
+		expect(weekdayNameFor(new Date(2026, 6, 30))).toBe('پنج‌شنبه')
+	})
+
+	it('builds a Sunday-first grid that still covers the whole month', () => {
+		const grid = buildMonthGrid(1405, 5, new Date(2026, 6, 30), SUNDAY)
+
+		expect(grid.days).toHaveLength(DAYS_IN_GRID)
+		expect(grid.days[0].date.getDay()).toBe(0) // Sunday
+		expect(grid.firstDay).toBe(SUNDAY)
+		expect(grid.days.filter((day) => day.inCurrentMonth)).toHaveLength(grid.monthLength)
+	})
+
+	it('still marks exactly six Fridays as the weekend when Sunday-first', () => {
+		const grid = buildMonthGrid(1405, 5, new Date(2026, 6, 30), SUNDAY)
+		const weekends = grid.days.filter((day) => day.isWeekend)
+
+		expect(weekends).toHaveLength(6)
+		expect(weekends.every((day) => day.date.getDay() === 5)).toBe(true)
+	})
+
+	it('covers a different Gregorian window than the Saturday-first grid', () => {
+		const sat = buildMonthGrid(1405, 5, new Date(2026, 6, 30), SATURDAY)
+		const sun = buildMonthGrid(1405, 5, new Date(2026, 6, 30), SUNDAY)
+
+		// The Sunday grid starts a day later, since Mordad 1 is a Friday.
+		expect(sun.rangeStart.getTime()).not.toBe(sat.rangeStart.getTime())
+		expect(sun.days.filter((d) => d.inCurrentMonth)).toHaveLength(sat.days.filter((d) => d.inCurrentMonth).length)
 	})
 })
 

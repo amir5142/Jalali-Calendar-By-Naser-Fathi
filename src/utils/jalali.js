@@ -21,16 +21,58 @@ export const JALALI_MONTHS = [
 	'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند',
 ]
 
-/** Weekday names, index 0 == Saturday (the first day of the Iranian week). */
+/** Weekday names in Saturday-first order. */
 export const WEEKDAYS = [
 	'شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه',
 ]
 
-/** Single-letter weekday labels for the grid header. */
+/** Single-letter weekday labels, Saturday-first. */
 export const WEEKDAYS_SHORT = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج']
 
-/** Friday is the Iranian weekend. */
-export const FRIDAY = 6
+/**
+ * Week-start options, expressed as JS `Date#getDay()` values so they can be
+ * used directly in arithmetic. Saturday is the Iranian default; some
+ * organisations run a Sunday-first week instead.
+ */
+export const SATURDAY = 6
+export const SUNDAY = 0
+
+/** Friday is the Iranian weekend, whatever the week starts on. */
+export const FRIDAY_GETDAY = 5
+
+/**
+ * Weekday labels rotated for the configured week start.
+ *
+ * @param {number} firstDay SATURDAY or SUNDAY
+ * @param {string[]} [names] the Saturday-first source list
+ * @return {string[]}
+ */
+export function weekdayNames(firstDay = SATURDAY, names = WEEKDAYS) {
+	// `names` is Saturday-first, so entry i is getDay (6 + i) % 7. The label for
+	// column 0 is therefore the entry at (firstDay - SATURDAY) mod 7.
+	const offset = (firstDay - SATURDAY + 7) % 7
+	return names.slice(offset).concat(names.slice(0, offset))
+}
+
+/**
+ * Weekday name of a date, independent of which day the week starts on.
+ *
+ * @param {Date} date the date to name
+ * @return {string}
+ */
+export function weekdayNameFor(date) {
+	return WEEKDAYS[(date.getDay() + 1) % 7]
+}
+
+/**
+ * Column index of the Iranian weekend (Friday) for the configured week start.
+ *
+ * @param {number} firstDay SATURDAY or SUNDAY
+ * @return {number}
+ */
+export function weekendColumn(firstDay = SATURDAY) {
+	return (FRIDAY_GETDAY - firstDay + 7) % 7
+}
 
 /** A month grid is always six full weeks, so the layout never jumps around. */
 export const WEEKS_IN_GRID = 6
@@ -79,13 +121,14 @@ export function jalaliToDate(jy, jm, jd, hours = 0, minutes = 0) {
 }
 
 /**
- * Weekday of a date on a Saturday-first week: Saturday is 0, Friday is 6.
+ * Column index of a date for the configured week start.
  *
  * @param {Date} date the date to inspect
+ * @param {number} [firstDay] SATURDAY or SUNDAY
  * @return {number}
  */
-export function weekdayIndex(date) {
-	return (date.getDay() + 1) % 7
+export function weekdayIndex(date, firstDay = SATURDAY) {
+	return (date.getDay() - firstDay + 7) % 7
 }
 
 /**
@@ -139,13 +182,16 @@ export function dayKey(date) {
  * @param {number} jy Jalali year
  * @param {number} jm Jalali month, 1-12
  * @param {Date} [today] the date to mark as today (injectable for tests)
+ * @param {number} [firstDay] SATURDAY (Iranian default) or SUNDAY
  * @return {object}
  */
-export function buildMonthGrid(jy, jm, today = new Date()) {
+export function buildMonthGrid(jy, jm, today = new Date(), firstDay = SATURDAY) {
 	const firstOfMonth = jalaliToDate(jy, jm, 1)
-	// Back up to the Saturday on or before the 1st, so column 0 is always Saturday.
-	const gridStart = addDays(firstOfMonth, -weekdayIndex(firstOfMonth))
+	// Back up to the first weekday on or before the 1st, so column 0 always
+	// holds the configured start of the week.
+	const gridStart = addDays(firstOfMonth, -weekdayIndex(firstOfMonth, firstDay))
 	const todayKey = dayKey(today)
+	const weekend = weekendColumn(firstDay)
 
 	const days = []
 	for (let offset = 0; offset < DAYS_IN_GRID; offset++) {
@@ -162,7 +208,7 @@ export function buildMonthGrid(jy, jm, today = new Date()) {
 			weekday,
 			inCurrentMonth: cellYear === jy && cellMonth === jm,
 			isToday: dayKey(date) === todayKey,
-			isWeekend: weekday === FRIDAY,
+			isWeekend: weekday === weekend,
 		})
 	}
 
@@ -170,6 +216,7 @@ export function buildMonthGrid(jy, jm, today = new Date()) {
 		jy,
 		jm,
 		days,
+		firstDay,
 		monthLength: jalaaliMonthLength(jy, jm),
 		isLeapYear: isLeapJalaaliYear(jy),
 		rangeStart: days[0].date,
@@ -191,7 +238,9 @@ export function formatMonthYear(jy, jm) {
  * @return {string} e.g. «پنج‌شنبه ۸ مرداد ۱۴۰۵»
  */
 export function formatFullDate(day) {
-	return `${WEEKDAYS[day.weekday]} ${toPersianDigits(day.jd)} ${JALALI_MONTHS[day.jm - 1]} ${toPersianDigits(day.jy)}`
+	// Named from the date itself, so the label stays correct whichever day the
+	// week is configured to start on.
+	return `${weekdayNameFor(day.date)} ${toPersianDigits(day.jd)} ${JALALI_MONTHS[day.jm - 1]} ${toPersianDigits(day.jy)}`
 }
 
 /**
@@ -200,6 +249,25 @@ export function formatFullDate(day) {
  */
 export function formatTime(date) {
 	return toPersianDigits(`${pad2(date.getHours())}:${pad2(date.getMinutes())}`)
+}
+
+/**
+ * Week number within the Jalali year, counting the week containing Farvardin 1
+ * as week one.
+ *
+ * @param {Date} date any date
+ * @param {number} [firstDay] SATURDAY or SUNDAY
+ * @return {number} 1-53
+ */
+export function jalaliWeekNumber(date, firstDay = SATURDAY) {
+	const { jy } = dateToJalali(date)
+	const nowruz = jalaliToDate(jy, 1, 1)
+	// Align both ends to the start of their week, so the count is whole weeks.
+	const weekOfNowruz = addDays(nowruz, -weekdayIndex(nowruz, firstDay))
+	const weekOfDate = addDays(date, -weekdayIndex(date, firstDay))
+	const days = Math.round((startOfDay(weekOfDate) - startOfDay(weekOfNowruz)) / 86400000)
+
+	return Math.floor(days / 7) + 1
 }
 
 export { isLeapJalaaliYear, isValidJalaaliDate, jalaaliMonthLength }

@@ -59,6 +59,54 @@ function buildEvent(event, start, end, allDay, calendar, objectUrl, suffix) {
 		end,
 		allDay,
 		recurring: suffix !== 'single',
+		isTask: false,
+		completed: false,
+		calendarId: calendar.id,
+		calendarName: calendar.displayName,
+		color: calendar.color,
+		url: objectUrl,
+	}
+}
+
+/**
+ * Turn a VTODO into something the grid can draw.
+ *
+ * This mirrors the official Calendar app: a task is shown *at its due date*
+ * rather than across however long it has been open, and a task with no due
+ * date is not shown at all — there is no day to put it on. Deck cards arrive
+ * through exactly this path, as VTODOs on `Deck: <board>` calendars.
+ *
+ * @param {ICAL.Component} vtodo the VTODO component
+ * @param {object} calendar the calendar it was loaded from
+ * @param {string} objectUrl CalDAV URL of the calendar object
+ * @param {number} index position within the object, to keep ids unique
+ * @return {object|null} null when the task has no due date
+ */
+function buildTask(vtodo, calendar, objectUrl, index) {
+	const due = vtodo.getFirstPropertyValue('due')
+	if (!due) {
+		return null
+	}
+
+	const at = due.toJSDate()
+	const status = vtodo.getFirstPropertyValue('status')
+	const percent = Number(vtodo.getFirstPropertyValue('percent-complete') ?? 0)
+	const uid = vtodo.getFirstPropertyValue('uid') ?? ''
+
+	return {
+		id: `${objectUrl}#task-${index}`,
+		uid,
+		title: (vtodo.getFirstPropertyValue('summary') ?? '').trim()
+			|| t('jalali_calendar', 'Untitled task'),
+		description: vtodo.getFirstPropertyValue('description') ?? '',
+		location: vtodo.getFirstPropertyValue('location') ?? '',
+		// A task occupies a single instant, so start and end are both the due date.
+		start: at,
+		end: at,
+		allDay: due.isDate,
+		recurring: false,
+		isTask: true,
+		completed: percent === 100 || status === 'COMPLETED',
 		calendarId: calendar.id,
 		calendarName: calendar.displayName,
 		color: calendar.color,
@@ -117,7 +165,11 @@ function expandRecurring(event, rangeStart, rangeEnd, calendar, objectUrl) {
 }
 
 /**
- * Parse one CalDAV calendar object into the events it contributes to the window.
+ * Parse one CalDAV calendar object into whatever it contributes to the window.
+ *
+ * `componentType` says which component the enclosing REPORT asked for. Parsing
+ * only that type keeps a calendar advertising both VEVENT and VTODO — queried
+ * once per type — from yielding the same object twice.
  *
  * @param {string} ics raw iCalendar data
  * @param {object} options options
@@ -125,11 +177,21 @@ function expandRecurring(event, rangeStart, rangeEnd, calendar, objectUrl) {
  * @param {Date} options.rangeEnd window end, exclusive
  * @param {object} options.calendar the calendar the object was loaded from
  * @param {string} options.objectUrl CalDAV URL of the calendar object
+ * @param {string} [options.componentType] 'VEVENT' (default) or 'VTODO'
  * @return {object[]}
  */
-export function extractEvents(ics, { rangeStart, rangeEnd, calendar, objectUrl }) {
+export function extractObjects(ics, { rangeStart, rangeEnd, calendar, objectUrl, componentType = 'VEVENT' }) {
 	const vcalendar = new ICAL.Component(ICAL.parse(ics))
 	registerTimezones(vcalendar)
+
+	if (componentType === 'VTODO') {
+		return vcalendar.getAllSubcomponents('vtodo')
+			.map((vtodo, index) => buildTask(vtodo, calendar, objectUrl, index))
+			.filter((task) => task !== null)
+			// The server filtered by time range already, but a task whose due
+			// date sits outside the grid would land in no cell anyway.
+			.filter((task) => task.start < rangeEnd && task.end >= rangeStart)
+	}
 
 	const vevents = vcalendar.getAllSubcomponents('vevent')
 	if (vevents.length === 0) {
