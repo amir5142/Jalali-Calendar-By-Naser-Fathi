@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Build, sign and attach the app tarball
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Restore the signing key
+        env:
+          SIGNING_KEY: ${{ secrets.APP_SIGNING_KEY }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::APP_SIGNING_KEY is not set — request a certificate first (see README)."
+            exit 1
+          fi
+          mkdir -p ~/.nextcloud/certificates
+          printf '%s' "$SIGNING_KEY" > ~/.nextcloud/certificates/jalali_calendar.key
+          chmod 600 ~/.nextcloud/certificates/jalali_calendar.key
+
+      - name: Build and sign
+        run: make appstore
+
+      - name: Attach artifacts to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/artifacts/jalali_calendar.tar.gz
+            build/artifacts/jalali_calendar.tar.gz.sig

@@ -1,0 +1,37 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Unit tests and build
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        # The Jalali grid is built from local dates, so it has to hold up
+        # both east and west of UTC.
+        timezone: ['UTC', 'Asia/Tehran', 'America/New_York']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Unit tests (TZ=${{ matrix.timezone }})
+        run: npm run test
+        env:
+          TZ: ${{ matrix.timezone }}
+
+      - run: npm run build

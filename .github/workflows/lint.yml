@@ -1,0 +1,30 @@
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    name: PHP syntax and info.xml
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: xml
+
+      - name: Lint PHP sources
+        run: find lib appinfo templates -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Validate info.xml against the app store schema
+        run: |
+          curl -sSfL -o info.xsd https://apps.nextcloud.com/schema/apps/info.xsd
+          xmllint --noout --schema info.xsd appinfo/info.xml

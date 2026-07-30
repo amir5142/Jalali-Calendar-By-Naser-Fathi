@@ -1,0 +1,32 @@
+{
+	"translations": {
+		"Jalali Calendar": "تقویم جلالی",
+		"Calendars": "تقویم‌ها",
+		"Loading calendars …": "در حال بارگذاری تقویم‌ها …",
+		"No calendars found.": "هیچ تقویمی پیدا نشد.",
+		"Events are read from your existing CalDAV calendars. Create and edit them in the Calendar app.": "رویدادها از تقویم‌های CalDAV موجود شما خوانده می‌شوند. برای ساخت و ویرایش از برنامهٔ «تقویم» استفاده کنید.",
+		"Previous month": "ماه پیش",
+		"Next month": "ماه بعد",
+		"Today": "امروز",
+		"Could not load your calendars": "بارگذاری تقویم‌ها ممکن نشد",
+		"Please check your connection and try again.": "لطفاً اتصال خود را بررسی کنید و دوباره تلاش کنید.",
+		"Try again": "تلاش دوباره",
+		"Some calendars could not be loaded": "بارگذاری برخی تقویم‌ها ممکن نشد",
+		"{count} more": "{count} مورد دیگر",
+		"{count} events": "{count} رویداد",
+		"No events": "بدون رویداد",
+		"Nothing is scheduled for this day.": "برای این روز چیزی برنامه‌ریزی نشده است.",
+		"Location": "مکان",
+		"Calendar": "تقویم",
+		"Repeats": "تکرار",
+		"This is one occurrence of a repeating event.": "این یکی از تکرارهای یک رویداد تکرارشونده است.",
+		"Description": "توضیحات",
+		"All day": "تمام‌روز",
+		"From {time}": "از {time}",
+		"Until {time}": "تا {time}",
+		"Untitled event": "رویداد بدون عنوان",
+		"Untitled calendar": "تقویم بدون نام",
+		"Times are shown in this device's timezone ({device}), which differs from your calendar timezone ({calendar}).": "زمان‌ها بر پایهٔ منطقهٔ زمانی این دستگاه ({device}) نمایش داده می‌شوند که با منطقهٔ زمانی تقویم شما ({calendar}) تفاوت دارد."
+	},
+	"pluralForm": "nplurals=2; plural=(n > 1);"
+}
