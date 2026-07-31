@@ -338,6 +338,11 @@ $hour-height: 48px;
 		grid-template-columns: var(--gutter, 56px) repeat(var(--columns, 7), minmax(0, 1fr));
 		min-height: 0;
 		overflow-y: auto;
+		// Reserve the scrollbar's width instead of letting it overlay the
+		// grid. The track sits on the leading edge under dir="rtl", so an
+		// overlay scrollbar lands on top of the last day column and reads as
+		// a stray bar floating in the empty non-working hours beside it.
+		scrollbar-gutter: stable;
 	}
 
 	&__gutter {

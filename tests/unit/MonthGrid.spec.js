@@ -16,12 +16,13 @@ const TODAY = new Date(2026, 6, 30) // 8 Mordad 1405
  * @param {object[]} events events to place on the grid
  * @return {object} a mounted MonthGrid
  */
-function mountGrid(events = []) {
+function mountGrid(events = [], props = {}) {
 	const grid = buildMonthGrid(1405, 5, TODAY)
 	return mount(MonthGrid, {
 		props: {
 			grid,
 			eventsByDay: groupEventsByDay(events, grid.days),
+			...props,
 		},
 	})
 }
@@ -80,6 +81,26 @@ describe('MonthGrid', () => {
 	it('starts the week on Saturday', () => {
 		const wrapper = mountGrid()
 		expect(wrapper.findAll('.month-grid__weekday-full')[0].text()).toBe('شنبه')
+	})
+
+	// Regression: the track list used to keep a 0px week-number column even
+	// with the numbers hidden. Nothing renders into it, so grid auto-placement
+	// fed it the first weekday header and one day per row, which then vanished
+	// into a zero-width column — Saturday disappeared from the month view.
+	// jsdom performs no grid layout, so assert on the declared tracks.
+	it('declares one track per column when week numbers are hidden', () => {
+		const columns = mountGrid().vm.gridStyle['--grid-columns']
+
+		expect(columns).toBe('repeat(7, minmax(0, 1fr))')
+		expect(mountGrid().findAll('.month-grid__weeknum')).toHaveLength(0)
+	})
+
+	it('adds a leading track only when week numbers are shown', () => {
+		const wrapper = mountGrid([], { showWeekNumbers: true })
+
+		expect(wrapper.vm.gridStyle['--grid-columns'])
+			.toBe('34px repeat(7, minmax(0, 1fr))')
+		expect(wrapper.findAll('.month-grid__weeknum')).toHaveLength(6)
 	})
 
 	it('labels the columns with full weekday names', () => {

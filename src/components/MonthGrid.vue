@@ -187,9 +187,16 @@ export default {
 		},
 
 		gridStyle() {
+			// The week-number track has to be added and removed, not merely
+			// collapsed to 0px: the cells that fill it are themselves behind
+			// v-if, so a zero-width track left in place still gets fed by grid
+			// auto-placement — swallowing the first weekday header and one day
+			// per row into a column nothing can see.
+			const days = `repeat(${this.columns}, minmax(0, 1fr))`
+
 			return {
 				'--columns': this.columns,
-				'--weeknum': this.showWeekNumbers ? '34px' : '0px',
+				'--grid-columns': this.showWeekNumbers ? `34px ${days}` : days,
 			}
 		},
 	},
@@ -265,7 +272,7 @@ export default {
 
 	&__weekdays {
 		display: grid;
-		grid-template-columns: var(--weeknum, 0px) repeat(var(--columns, 7), minmax(0, 1fr));
+		grid-template-columns: var(--grid-columns, repeat(7, minmax(0, 1fr)));
 		border-bottom: 1px solid var(--color-border);
 	}
 
@@ -304,7 +311,7 @@ export default {
 	&__days {
 		display: grid;
 		flex: 1 1 auto;
-		grid-template-columns: var(--weeknum, 0px) repeat(var(--columns, 7), minmax(0, 1fr));
+		grid-template-columns: var(--grid-columns, repeat(7, minmax(0, 1fr)));
 		grid-template-rows: repeat(6, minmax(84px, 1fr));
 		min-height: 0;
 	}

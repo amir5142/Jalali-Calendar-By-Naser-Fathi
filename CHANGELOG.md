@@ -10,6 +10,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-07-31
+
+### Fixed
+
+- **Every month row silently dropped a day, and Saturday never appeared.** The
+  grid declared a leading week-number track that collapsed to `0px` when the
+  numbers were hidden, but the cells that fill it are behind a `v-if` — so grid
+  auto-placement fed the track the first weekday header and one day per row,
+  rendering them into a zero-width column. The remaining days were left shifted
+  one column out of alignment with their weekday headers. The track is now
+  added and removed rather than collapsed. Under `dir="rtl"` the swallowed
+  track is the rightmost, which is why only a sliver of «شنبه» was visible.
+- The week view's scrollbar overlaid the grid instead of reserving space,
+  appearing as a stray bar floating beside the non-working hours.
+
+## [0.4.1] - 2026-07-31
+
+### Fixed
+
+- **The Gregorian date range under the Persian title was misordered** in the
+  day and week views: `25 July 2026 – 31 July 2026` rendered as
+  `July 2026 – 31 July 2026 25`. Latin text inside the RTL toolbar has no bidi
+  isolate, so a leading day number is reordered to the far end. Only those two
+  views put a number first, which is why the month view was unaffected.
+- Nextcloud floats its app-navigation toggle over the start of the app content,
+  where it covered the first view button and clipped «List» to «st».
+
 ## [0.4.0] - 2026-07-30
 
 ### Added
@@ -197,7 +224,10 @@ First release — read-only Jalali month view.
 - Month view only — no week or day view yet.
 - No Iranian holidays overlay yet.
 
-[Unreleased]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.4.2
+[0.4.1]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.4.1
+[0.4.0]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.4.0
 [0.2.4]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.2.4
 [0.2.3]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.2.3
 [0.2.1]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.2.1

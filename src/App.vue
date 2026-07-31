@@ -492,6 +492,14 @@ export default {
 	flex-direction: column;
 	height: 100%;
 	min-height: 0;
+	// Nextcloud floats its app-navigation toggle over the start of the app
+	// content, which otherwise lands on top of the first view button and
+	// clipped "List" to "st". The padding is logical and set here rather than
+	// on the toolbar because the toolbar hardcodes dir="rtl": logical
+	// properties resolve against the element's own direction, so on the
+	// toolbar this would reserve space on the wrong side whenever the
+	// surrounding Nextcloud UI is left-to-right.
+	padding-inline-start: var(--default-clickable-area, 44px);
 }
 
 .calendar-toolbar {
@@ -525,6 +533,14 @@ export default {
 		grid-area: gregorian;
 		color: var(--color-text-maxcontrast);
 		font-size: 13px;
+		// The label is Latin text inside an RTL toolbar. Without an isolate the
+		// bidi algorithm reorders a leading day number to the far end, so the
+		// week range "25 July 2026 – 31 July 2026" renders as
+		// "July 2026 – 31 July 2026 25". Only day and week views set a day
+		// number, which is why the month view looked fine.
+		direction: ltr;
+		unicode-bidi: isolate;
+		text-align: right;
 	}
 
 	&__views {

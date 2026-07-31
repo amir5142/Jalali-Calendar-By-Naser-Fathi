@@ -44,7 +44,7 @@ picker is planned for the next version.
 این نسخه فقط خواندنی است. ساخت و ویرایش رویداد با تقویم‌گزین شمسی در نسخهٔ بعد
 افزوده می‌شود.
 	]]></description>
-	<version>0.4.0</version>
+	<version>0.4.2</version>
 	<licence>agpl</licence>
 	<author mail="fathi@post.com">Naser Fathi</author>
 	<namespace>JalaliCalendar</namespace>
