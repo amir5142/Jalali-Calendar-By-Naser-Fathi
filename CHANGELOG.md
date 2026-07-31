@@ -12,6 +12,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.4.2] - 2026-07-31
 
+### Changed
+
+- **Supported Nextcloud versions widened to 30–34, and PHP to 8.1–8.5.**
+  Nextcloud 34 ships PHP 8.5, and the declared range gates installation — an
+  app that runs perfectly is still refused outright when the interpreter falls
+  outside it, so the old 8.4 ceiling would have failed every install on 34.
+  The gate only fires on install or enable, which is why an already-running
+  instance never reveals it. Verified against 30.0.17, 31.0.14, 32.0.13,
+  33.0.7 and 34.0.2.
+
 ### Fixed
 
 - **Every month row silently dropped a day, and Saturday never appeared.** The
