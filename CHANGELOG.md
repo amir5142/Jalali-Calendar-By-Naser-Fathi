@@ -10,6 +10,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-31
+
+### Added
+
+- **A Shamsi date picker for date fields elsewhere in Nextcloud**, Deck due
+  dates above all. Those fields are `<input type="datetime-local">`, drawn by
+  the browser itself: they always render a Gregorian calendar, and no locale or
+  stylesheet can change that. The picker therefore adds its own trigger and a
+  badge showing the Shamsi equivalent beside the field, rather than trying to
+  restyle it.
+
+  The native input stays the source of truth. It is enhanced in place and never
+  replaced — apps bind their models to that exact element, and a re-created
+  input loses the binding on the next render, after which the field looks fine
+  and quietly stops saving. Picked dates are written through
+  `HTMLInputElement`'s own value setter and announced with bubbling `input` and
+  `change` events, because a plain `input.value = …` assignment updates no
+  model. The existing time of day is preserved; only the date changes.
+
+- **A personal setting to turn the picker off** (Settings → Personal → Jalali
+  Calendar), on by default. Turning it off stops the script being delivered at
+  all rather than loading it and having it decline to run, so opting out of
+  injected JavaScript on unrelated pages is a real opt-out.
+
+- `npm run test:parity` holds `JalaliConverter.php` and jalaali-js to the same
+  answers across 55,152 days (1925–2075) on `toJalali`, `toGregorian` and the
+  round trip. The two are independent implementations, and the picker writes
+  dates that the PHP side reads back, so a single day of drift would misplace
+  off-days with nothing to trace it by. It runs as its own CI job: it needs PHP,
+  and unlike the unit suite it is timezone-independent.
+
+### Changed
+
+- The picker ships as a separate ~11 kB entry point rather than riding on the
+  calendar bundle. That bundle is ~395 kB, which is not something to put on
+  every page in an instance, so the new one reaches for neither Vue nor
+  `@nextcloud/vue`.
+
 ## [0.4.2] - 2026-07-31
 
 ### Changed
@@ -234,7 +272,8 @@ First release — read-only Jalali month view.
 - Month view only — no week or day view yet.
 - No Iranian holidays overlay yet.
 
-[Unreleased]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.5.0
 [0.4.2]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.4.2
 [0.4.1]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.4.1
 [0.4.0]: https://github.com/nsrfth/Jalali-Calendar-By-Naser-Fathi/releases/tag/v0.4.0

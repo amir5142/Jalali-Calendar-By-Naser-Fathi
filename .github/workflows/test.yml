@@ -35,3 +35,27 @@ jobs:
           TZ: ${{ matrix.timezone }}
 
       - run: npm run build
+
+  parity:
+    # The PHP converter is a hand port of jalaali-js, and the Shamsi picker
+    # writes dates that PHP reads back — a day of drift between them would be
+    # invisible until an off-day landed on the wrong date. Its own job because
+    # it needs PHP and, unlike the suite above, is timezone-independent.
+    name: PHP/JS conversion parity
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run test:parity

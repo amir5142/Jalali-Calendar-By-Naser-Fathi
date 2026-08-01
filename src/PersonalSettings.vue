@@ -56,6 +56,19 @@
 			</NcNoteCard>
 		</NcSettingsSection>
 
+		<NcSettingsSection :name="t('jalali_calendar', 'Shamsi date picker')"
+			:description="t('jalali_calendar', 'Native date fields are drawn by the browser and are always Gregorian. This adds a Shamsi picker beside them in other apps, such as Deck due dates.')">
+			<NcCheckboxRadioSwitch type="switch"
+				:model-value="prefs.globalPicker"
+				:disabled="saving"
+				@update:model-value="save('globalPicker', $event)">
+				{{ t('jalali_calendar', 'Add a Shamsi picker to date fields across Nextcloud') }}
+			</NcCheckboxRadioSwitch>
+			<p class="hint">
+				{{ t('jalali_calendar', 'When off, no script from this app is loaded outside its own pages. Reload for the change to take effect.') }}
+			</p>
+		</NcSettingsSection>
+
 		<NcSettingsSection :name="t('jalali_calendar', 'CalDAV')"
 			:description="t('jalali_calendar', 'This app reads the same calendars as the Calendar app. Use these addresses to add them to a phone or desktop client.')">
 			<div class="row row--wrap">
@@ -129,6 +142,7 @@ export default {
 				showWeekends: state.showWeekends ?? true,
 				showWeekNumbers: state.showWeekNumbers ?? false,
 				slotDuration: state.slotDuration ?? 30,
+				globalPicker: state.globalPicker ?? true,
 			},
 			davUrl: state.davUrl ?? '',
 			davPrincipalUrl: state.davPrincipalUrl ?? '',

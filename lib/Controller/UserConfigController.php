@@ -42,6 +42,7 @@ class UserConfigController extends OCSController {
 	 * @param bool|null $showWeekends keep the weekend column
 	 * @param bool|null $showWeekNumbers show the Jalali week number
 	 * @param int|null $slotDuration minutes per row in the day and week grids
+	 * @param bool|null $globalPicker offer the Shamsi picker on date fields elsewhere
 	 */
 	#[NoAdminRequired]
 	public function update(
@@ -50,6 +51,7 @@ class UserConfigController extends OCSController {
 		?bool $showWeekends = null,
 		?bool $showWeekNumbers = null,
 		?int $slotDuration = null,
+		?bool $globalPicker = null,
 	): DataResponse {
 		try {
 			$this->userConfig->update($this->userId(), [
@@ -58,6 +60,7 @@ class UserConfigController extends OCSController {
 				UserConfigService::SHOW_WEEKENDS => $showWeekends,
 				UserConfigService::SHOW_WEEK_NUMBERS => $showWeekNumbers,
 				UserConfigService::SLOT_DURATION => $slotDuration,
+				UserConfigService::GLOBAL_PICKER => $globalPicker,
 			]);
 		} catch (\InvalidArgumentException $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);

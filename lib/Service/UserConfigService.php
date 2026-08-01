@@ -25,6 +25,7 @@ class UserConfigService {
 	public const SHOW_WEEKENDS = 'showWeekends';
 	public const SHOW_WEEK_NUMBERS = 'showWeekNumbers';
 	public const SLOT_DURATION = 'slotDuration';
+	public const GLOBAL_PICKER = 'globalPicker';
 
 	/** Minutes per row in the day and week grids. */
 	public const SLOT_DURATIONS = [15, 30, 60];
@@ -34,6 +35,9 @@ class UserConfigService {
 		self::LIMIT_MONTH_EVENTS => true,
 		self::SHOW_WEEKENDS => true,
 		self::SHOW_WEEK_NUMBERS => false,
+		// On by default: the picker is the only way to enter a Shamsi date in
+		// apps like Deck, and it is what most people install this app for.
+		self::GLOBAL_PICKER => true,
 	];
 
 	private const DEFAULT_SLOT = 30;
@@ -66,6 +70,19 @@ class UserConfigService {
 	private function getBool(string $userId, string $key, bool $default): bool {
 		$raw = $this->config->getUserValue($userId, Application::APP_ID, $key, $default ? '1' : '0');
 		return $raw === '1';
+	}
+
+	/**
+	 * Whether to load the Shamsi picker on every page for this user.
+	 *
+	 * Read on every single page render, so it stays a lone user-value lookup
+	 * rather than going through getAll().
+	 *
+	 * @param string $userId the user to read for
+	 * @return bool
+	 */
+	public function isGlobalPickerEnabled(string $userId): bool {
+		return $this->getBool($userId, self::GLOBAL_PICKER, self::DEFAULTS[self::GLOBAL_PICKER]);
 	}
 
 	/**

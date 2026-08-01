@@ -9,6 +9,10 @@ export default createAppConfig({
 	main: resolve(join('src', 'main.js')),
 	admin: resolve(join('src', 'admin.js')),
 	personal: resolve(join('src', 'personal.js')),
+	// Loaded on every logged-in page in the instance so date fields in other
+	// apps can be enhanced. It must never reach for Vue or @nextcloud/vue:
+	// `main` is ~395 kB, and that is not something to put on every page.
+	inputs: resolve(join('src', 'inputs.js')),
 }, {
 	// Styles ride along in the bundle: building them separately emits
 	// hash-named chunks that Util::addStyle() has no way to reference.
