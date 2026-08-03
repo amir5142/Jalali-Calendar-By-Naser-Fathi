@@ -24,7 +24,16 @@ jobs:
       - name: Lint PHP sources
         run: find lib appinfo templates -name '*.php' -print0 | xargs -0 -n1 php -l
 
+      - name: Install xmllint
+        # The runner image does not reliably ship libxml2-utils, and the step
+        # below had failed on every run since the first commit while the same
+        # command passed locally against a byte-identical schema.
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libxml2-utils
+
       - name: Validate info.xml against the app store schema
         run: |
+          # Echoed so a future failure names its own cause instead of leaving
+          # a bare non-zero exit to guess at.
+          xmllint --version
           curl -sSfL -o info.xsd https://apps.nextcloud.com/schema/apps/info.xsd
           xmllint --noout --schema info.xsd appinfo/info.xml
